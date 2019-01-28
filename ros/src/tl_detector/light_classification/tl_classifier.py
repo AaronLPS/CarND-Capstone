@@ -1,14 +1,16 @@
-from styx_msgs.msg import TrafficLight
 import tensorflow as tf
 import numpy as np
 import cv2
 import os
 import rospy
 
+from timeit import default_timer as timer
+
+
+CLASS_TRAFFIC_LIGHT = 10
 
 MODEL_DIR = 'light_classification/models/'
 IMG_DIR = 'light_classification/img/'
-TRAFFIC_LIGHT_CLASSES = 10
 
 
 class TLClassifier(object):
@@ -29,7 +31,7 @@ class TLClassifier(object):
         self.detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
 
         # the first decoding
-        test_image = cv2.imread(IMG_DIR + 'image3.png')
+        test_image = cv2.imread(IMG_DIR + 'image_test.jpg')
         image_np, box_coords, classes, scores = self.detect_tl(test_image)
         # Traditional traffic light classifier
         pred_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
@@ -43,46 +45,57 @@ class TLClassifier(object):
         self.num_image = 1
         
         
-    def load_graph(self, graph_file):
+
+    def load_graph(self, graph_file, use_xla=False):
         config = tf.ConfigProto(log_device_placement=False)
         config.gpu_options.allow_growth = True
         session = tf.Session(config=config)
+#         if use_xla:
+#             jit_level = tf.OptimizerOptions.ON_1
+#             config.graph_options.optimizer_options.global_jit_level = jit_level
         with tf.Session(graph=tf.Graph(), config=config) as sess:
             gd = tf.GraphDef()
             with tf.gfile.Open(graph_file, 'rb') as f:
                 data = f.read()
                 gd.ParseFromString(data)
             tf.import_graph_def(gd, name='')
-#             ops = sess.graph.get_operations()
+            ops = sess.graph.get_operations()
+            n_ops = len(ops)
+            print("number of operations = %d" % n_ops)
             return sess
-      
- # Detect traffic light box
+#             return sess, ops
+
+
+
     def detect_tl(self, image):
         trt_image = np.copy(image)
         image_np = np.expand_dims(np.asarray(trt_image, dtype=np.uint8), 0)
-        rospy.loginfo("DEBUG: stage 0")
-        # run detection.
+    
+        
+        # Actual detection.
         (boxes, scores, classes) = self.sess.run([self.detection_boxes, self.detection_scores, self.detection_classes], 
                                             feed_dict={self.image_tensor: image_np})
+    
         # Remove unnecessary dimensions
         boxes = np.squeeze(boxes)
         scores = np.squeeze(scores)
         classes = np.squeeze(classes)
     
-        threshold = 0.8
-        # Filter traffic light boxes with threshold
-        rospy.loginfo("DEBUG: stage 1")
-        boxes, scores, classes = self.filter_boxes(threshold, boxes, scores, 
-                                                   classes, keep_classes=[TRAFFIC_LIGHT_CLASSES])
-        # Convert the normalized box coordinates(0~1) to image coordinates
+        confidence_cutoff = 0.8
+        # Filter traffic light boxes with a confidence score less than `confidence_cutoff`
+        boxes, scores, classes = self.filter_boxes(confidence_cutoff, boxes, scores, classes, keep_classes=[CLASS_TRAFFIC_LIGHT])
+    
+        # The current box coordinates are normalized to a range between 0 and 1.
+        # This converts the coordinates actual location on the image.
         image_np = np.squeeze(image_np)
         width = image_np.shape[1]
         height = image_np.shape[0]
-        rospy.loginfo("DEBUG: stage 2")
         box_coords = self.to_image_coords(boxes, height, width)
-        rospy.loginfo("DEBUG: stage 3")
         
-# Filter the boxes which detection confidence lower than the threshold        
+        return image_np, box_coords, classes, scores
+    
+    
+    # Filter the boxes which detection confidence lower than the threshold        
     def filter_boxes(self, min_score, boxes, scores, classes, keep_classes):
         n = len(classes)
         idxs = []
@@ -103,8 +116,12 @@ class TLClassifier(object):
         box_coords[:, 2] = boxes[:, 2] * height
         box_coords[:, 3] = boxes[:, 3] * width
         return box_coords
-        
-#Draw bounding box on traffic light, and detect if it is RED
+    
+    
+    
+    
+
+    #Draw bounding box on traffic light, and detect if it is RED
     def classify_red_tl(self, image_np, boxes, classes, scores, thickness=5):
         for i in range(len(boxes)):
             rospy.loginfo("DEBUG: stage 3.1")
@@ -143,10 +160,11 @@ class TLClassifier(object):
               if npoints > 10 and mean_row < 0.33:
                   rospy.loginfo("RED Light Detection Confidance: %.2f", score)  
                   return image_np, True
-        return image_np, False        
-        
-
-# select RED mask in simulation situation
+        return image_np, False   
+    
+    
+    
+    # select RED mask in simulation situation
     def select_red_simu(self, img): # BGR
         lower = np.array([ 0,   0, 200], dtype="uint8")
         upper = np.array([ 55, 55, 255], dtype="uint8")
@@ -168,13 +186,10 @@ class TLClassifier(object):
 
     def get_classification(self, image):
         """Determines the color of the traffic light in the image
-
         Args:
             image (cv::Mat): image containing the traffic light
-
         Returns:
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
-
         """
         #implement light color prediction
         image_np, box_coords, classes, scores = self.detect_tl(image)        
@@ -189,5 +204,3 @@ class TLClassifier(object):
             return TrafficLight.RED
         else:
             return TrafficLight.UNKNOWN
-
-        
