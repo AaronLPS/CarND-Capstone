@@ -19,6 +19,7 @@ class TLClassifier(object):
         # https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md
         self.detector = MODEL_DIR + 'faster_rcnn_inception_v2.pb'
         self.sess= self.load_graph(self.detector)
+        detection_graph = self.sess.graph
         
         # The input placeholder for the image.
         # 'get_tensor_by_name' returns the Tensor with the associated name in the Graph.
@@ -28,10 +29,11 @@ class TLClassifier(object):
         self.detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
 
         # the first decoding
-        test_image = cv2.imread(IMG_DIR + 'image64.png')
+        test_image = cv2.imread(IMG_DIR + 'image3.png')
         image_np, box_coords, classes, scores = self.detect_tl(test_image)
         # Traditional traffic light classifier
         pred_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
+        rospy.loginfo("DEBUG: stage 4")
         if is_red:
             rospy.loginfo("Classifier: RED")
         else:
@@ -58,6 +60,7 @@ class TLClassifier(object):
     def detect_tl(self, image):
         trt_image = np.copy(image)
         image_np = np.expand_dims(np.asarray(trt_image, dtype=np.uint8), 0)
+        rospy.loginfo("DEBUG: stage 0")
         # run detection.
         (boxes, scores, classes) = self.sess.run([self.detection_boxes, self.detection_scores, self.detection_classes], 
                                             feed_dict={self.image_tensor: image_np})
@@ -68,16 +71,19 @@ class TLClassifier(object):
     
         threshold = 0.8
         # Filter traffic light boxes with threshold
+        rospy.loginfo("DEBUG: stage 1")
         boxes, scores, classes = self.filter_boxes(threshold, boxes, scores, 
                                                    classes, keep_classes=[TRAFFIC_LIGHT_CLASSES])
         # Convert the normalized box coordinates(0~1) to image coordinates
         image_np = np.squeeze(image_np)
         width = image_np.shape[1]
         height = image_np.shape[0]
+        rospy.loginfo("DEBUG: stage 2")
         box_coords = self.to_image_coords(boxes, height, width)
+        rospy.loginfo("DEBUG: stage 3")
         
 # Filter the boxes which detection confidence lower than the threshold        
-    def filter_boxes(self, min_score, boxes, scores, classes, keep_classes=None):
+    def filter_boxes(self, min_score, boxes, scores, classes, keep_classes):
         n = len(classes)
         idxs = []
         for i in range(n):
@@ -101,6 +107,7 @@ class TLClassifier(object):
 #Draw bounding box on traffic light, and detect if it is RED
     def classify_red_tl(self, image_np, boxes, classes, scores, thickness=5):
         for i in range(len(boxes)):
+            rospy.loginfo("DEBUG: stage 3.1")
             bot, left, top, right = boxes[i, ...]
             class_id = int(classes[i])
             score = scores[i]

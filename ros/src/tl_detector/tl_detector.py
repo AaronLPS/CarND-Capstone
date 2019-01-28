@@ -31,14 +31,18 @@ class TLDetector(object):
         self.closest_wp_index = None
         self.ego_x = None
         self.ego_y = None
+        
+        
         #find stop line
+        config_string = rospy.get_param("/traffic_light_config")
+        self.config = yaml.load(config_string)
         self.stop_line_positions = self.config['stop_line_positions']
         self.stop_line_waypoints = []
         self.enable_find_stop_lines = False
         self.light_wp = -1
         #
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier(deep_learning=False)
+        self.light_classifier = TLClassifier()
         
         
 
@@ -55,8 +59,7 @@ class TLDetector(object):
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_callback)
 
-        config_string = rospy.get_param("/traffic_light_config")
-        self.config = yaml.load(config_string)
+ 
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
