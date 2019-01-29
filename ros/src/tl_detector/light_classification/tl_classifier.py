@@ -5,12 +5,13 @@ import os
 import rospy
 
 from timeit import default_timer as timer
-
+from styx_msgs.msg import TrafficLight
 
 CLASS_TRAFFIC_LIGHT = 10
 
 MODEL_DIR = 'light_classification/models/'
 IMG_DIR = 'light_classification/img/'
+DEBUG_DIR = 'light_classification/result/'
 
 
 class TLClassifier(object):
@@ -22,6 +23,9 @@ class TLClassifier(object):
         self.detector = MODEL_DIR + 'faster_rcnn_inception_v2.pb'
         self.sess= self.load_graph(self.detector)
         detection_graph = self.sess.graph
+        
+        if not os.path.exists(DEBUG_DIR): #check the result of light detection
+            os.makedirs(DEBUG_DIR)
         
         # The input placeholder for the image.
         # 'get_tensor_by_name' returns the Tensor with the associated name in the Graph.
@@ -35,7 +39,7 @@ class TLClassifier(object):
         image_np, box_coords, classes, scores = self.detect_tl(test_image)
         # Traditional traffic light classifier
         pred_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
-        rospy.loginfo("DEBUG: stage 4")
+#         rospy.loginfo("DEBUG: stage 4")
         if is_red:
             rospy.loginfo("Classifier: RED")
         else:
@@ -124,7 +128,7 @@ class TLClassifier(object):
     #Draw bounding box on traffic light, and detect if it is RED
     def classify_red_tl(self, image_np, boxes, classes, scores, thickness=5):
         for i in range(len(boxes)):
-            rospy.loginfo("DEBUG: stage 3.1")
+#             rospy.loginfo("DEBUG: stage 3.1")
             bot, left, top, right = boxes[i, ...]
             class_id = int(classes[i])
             score = scores[i]
@@ -194,10 +198,10 @@ class TLClassifier(object):
         #implement light color prediction
         image_np, box_coords, classes, scores = self.detect_tl(image)        
         # light color detection
-        pred_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
-        fimage = DEBUG_DIR + 'image' + str(self.num_image) + '.png'
+        detected_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
+        fimage = DEBUG_DIR + 'detected_img_' + str(self.num_image) + '.png'
         #output the predicted image
-        cv2.imwrite(fimage, pred_image)
+        cv2.imwrite(fimage, detected_image)
         self.num_image += 1
         #return 'if it is a RED'
         if is_red:

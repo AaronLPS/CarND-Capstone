@@ -6,6 +6,7 @@ from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
 
 import numpy as np
+from scipy.spatial import KDTree
 
 import math
 import copy
@@ -33,8 +34,9 @@ class WaypointUpdater(object):
         # Subscribers
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
         rospy.Subscriber("/current_velocity", TwistStamped, self.current_velocity_cb, queue_size=1)
+        # 
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
 
         # Publishers
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
@@ -76,19 +78,16 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg):
         traffic_wp_index = msg.data
-        # TODO: Callback for /traffic_waypoint message. Implement
-
-        # If first detection of red light => compute slow down path
-        if msg.data > 0 and msg.data != self.traffic_wp_index and self.closest_wp_index is not None: 
+        rospy.logwarn("[traffic_cb]")
+        # on RED light, generate the path with slowing down speed
+        if traffic_wp_index > 0 and traffic_wp_index != self.traffic_wp_index and self.closest_wp_index is not None: 
+            rospy.logwarn("[traffic_cb]: RED")
             closest_wp_index = self.closest_wp_index
-
             if traffic_wp_index > closest_wp_index:
                 distance_to_stop = self.distance(self.waypoints, closest_wp_index, traffic_wp_index)
                 if distance_to_stop > 0:
-
                     self.waypoints_modif_start = closest_wp_index + 1
                     self.waypoints_modif_end = traffic_wp_index
-
                     for wp in range(closest_wp_index, traffic_wp_index):
                         dist = self.distance(self.waypoints, wp+1, traffic_wp_index)
                         vel = math.sqrt(2 * MAX_DECEL * dist) 
@@ -97,11 +96,13 @@ class WaypointUpdater(object):
                         if vel < 1.:
                             vel = 0.
                         self.set_waypoint_velocity(self.waypoints, wp+1, vel)
-
-        # if end of red light => restore speed to original
-        if msg.data < 0 and msg.data != self.traffic_wp_index and self.waypoints_modif_end is not None:
+        # on RED light passed, restore speed 
+        if traffic_wp_index < 0 and traffic_wp_index != self.traffic_wp_index and self.waypoints_modif_end is not None:
+            rospy.logwarn("[traffic_cb]: RED PASSED")
             for wp in range(self.waypoints_modif_start, self.waypoints_modif_end + 1):
-                self.set_waypoint_velocity(self.waypoints, wp, self.get_waypoint_velocity(self.waypoints_backup[wp]))
+                self.set_waypoint_velocity(self.waypoints, 
+                                           wp, 
+                                           self.get_waypoint_velocity(self.waypoints_backup[wp]))
 
         self.traffic_wp_index = traffic_wp_index
 
@@ -120,7 +121,7 @@ class WaypointUpdater(object):
 
                 planned_vel = self.get_waypoint_velocity(self.waypoints[self.closest_wp_index])
                 current_vel = self.current_velocity
-                rospy.logwarn("wp=%d closest_dist=%f diff_vel=%f", self.closest_wp_index, self.closest_wp_dist, current_vel - planned_vel)
+#                 rospy.logwarn("[waypoint: %d]  [closest_distance: %f]  [diff_velocity: %f]", self.closest_wp_index, self.closest_wp_dist, current_vel - planned_vel)
 
                 final_waypoints = []
                 for i in range(LOOKAHEAD_WPS):
@@ -191,6 +192,14 @@ class WaypointUpdater(object):
         self.closest_wp_dist = closest_dist # for logging 
         return closest_wp_index
 
+#     def get_closest_waypoint(self, x, y):
+#         if self.waypoint_tree:
+#             closest_idx = self.waypoint_tree.query([x, y], 1)[1]
+#             return closest_idx
+#         else:
+#             rospy.loginfo("waypoint_tree =  None " )
+#             return -1
+    
 
 if __name__ == '__main__':
     try:
