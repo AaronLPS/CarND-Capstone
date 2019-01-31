@@ -103,8 +103,8 @@ class WaypointUpdater(object):
                 self.set_waypoint_velocity(self.waypoints, 
                                            wp, 
                                            self.get_waypoint_velocity(self.waypoints_backup[wp]))
-
         self.traffic_wp_index = traffic_wp_index
+
 
     def obstacle_cb(self, msg):
         # TODO

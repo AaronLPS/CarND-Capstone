@@ -32,6 +32,8 @@ class TLDetector(object):
         self.ego_x = None
         self.ego_y = None
         
+        self.state_red_count = -1
+        
         
         #find stop line
         config_string = rospy.get_param("/traffic_light_config")
@@ -62,15 +64,19 @@ class TLDetector(object):
  
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
+        self.gpu_ready_pub = rospy.Publisher('/gpu_ready', Int32, queue_size=1)
 
         self.bridge = CvBridge()
         self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
+        
+        self.gpu_ready_pub.publish(Int32(1))
 
         self.state = TrafficLight.UNKNOWN
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        
         self.loop()
 
 #         rospy.spin()
@@ -111,8 +117,8 @@ class TLDetector(object):
                     self.upcoming_red_light_pub.publish(Int32(self.light_wp))
                 else:
                     self.upcoming_red_light_pub.publish(Int32(-1))
-            else:
-                rospy.loginfo("Wait for Camera Signal")
+#             else:
+#                 rospy.loginfo("Wait for Camera Signal")
             rate.sleep()
     
     

@@ -199,9 +199,9 @@ class TLClassifier(object):
         image_np, box_coords, classes, scores = self.detect_tl(image)        
         # light color detection
         detected_image, is_red = self.classify_red_tl(image_np, box_coords, classes, scores)
-        fimage = DEBUG_DIR + 'detected_img_' + str(self.num_image) + '.png'
-        #output the predicted image
-        cv2.imwrite(fimage, detected_image)
+#         fimage = DEBUG_DIR + 'detected_img_' + str(self.num_image) + '.png'
+#         #output the predicted image
+#         cv2.imwrite(fimage, detected_image)
         self.num_image += 1
         #return 'if it is a RED'
         if is_red:
